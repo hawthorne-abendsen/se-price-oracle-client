@@ -1,0 +1,20 @@
+{
+  "name": "se-price-oracle-client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "soroban-client": "^0.5.0",
+    "tslib": "^2.5.0"
+  },
+  "devDependencies": {
+    "bignumber.js": "^4.0.0",
+    "jest": "^29.5.0",
+    "@stellar-expert/eslint-config-js": "github:stellar-expert/eslint-config-js"
+  }
+}
