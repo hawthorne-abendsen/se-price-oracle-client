@@ -1,4 +1,4 @@
-const {Server, Contract, Keypair, StrKey, TransactionBuilder, Address, xdr, Transaction} = require('soroban-client')
+const {Server, Contract, TransactionBuilder, Address, xdr, Transaction, Account} = require('soroban-client')
 
 /**
  * @typedef {Object} Config
@@ -21,13 +21,25 @@ const {Server, Contract, Keypair, StrKey, TransactionBuilder, Address, xdr, Tran
  * @param {TxOptions} options
  */
 async function buildTransaction(client, source, operation, options) {
-    const sourceAccount = await client.server.getAccount(source)
+    let sourceAccount = null
+
+    if (typeof source === 'object')
+        sourceAccount = new Account(source.accountId, source.sequence)
+    sourceAccount = await client.server.loadAccount(source)
+
     const transaction = new TransactionBuilder(sourceAccount, {fee: options.fee, networkPassphrase: client.network})
         .addOperation(operation)
         .setTimeout(options.timeout)
         .build()
 
     return await client.server.prepareTransaction(transaction, client.network)
+}
+
+function getAccountId(source) {
+    if (typeof source === 'object') {
+        return source.accountId
+    }
+    return source
 }
 
 class OracleClient {
@@ -72,7 +84,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to configure the oracle contract
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {Config} config - Configuration object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
@@ -103,14 +115,14 @@ class OracleClient {
         return await buildTransaction(
             this,
             source,
-            this.contract.call('config', new Address(source).toScVal(), configScVal),
+            this.contract.call('config', new Address(getAccountId(source)).toScVal(), configScVal),
             options
         )
     }
 
     /**
      * Builds a transaction to register assets
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string[]} assets - Array of valid Stellar asset addresses
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
@@ -120,7 +132,7 @@ class OracleClient {
             source,
             this.contract.call(
                 'add_assets',
-                new Address(source).toScVal(),
+                new Address(getAccountId(source)).toScVal(),
                 xdr.ScVal.scvVec(assets.map(v => new Address(v).toScVal()))
             ),
             options
@@ -129,7 +141,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to set prices
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {{ hi: string, lo: string }[]} prices - Array of prices
      * @param {number} timestamp - Timestamp in milliseconds
      * @param {TxOptions} options - Transaction options
@@ -149,7 +161,7 @@ class OracleClient {
             source,
             this.contract.call(
                 'set_price',
-                new Address(source).toScVal(),
+                new Address(getAccountId(source)).toScVal(),
                 scValPrices,
                 xdr.ScVal.scvU64(xdr.Uint64.fromString(timestamp.toString()))
             ),
@@ -159,7 +171,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get admin
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
@@ -169,7 +181,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get base asset
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
@@ -179,7 +191,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get decimals
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
@@ -189,7 +201,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get resolution
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
@@ -199,7 +211,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get retention period
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
@@ -209,7 +221,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get supported assets
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
@@ -219,7 +231,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get asset price at timestamp
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} asset - Valid Stellar asset address
      * @param {number} timestamp - Timestamp in milliseconds
      * @param {TxOptions} options - Transaction options
@@ -240,7 +252,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get cross asset price at timestamp
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} baseAsset - Valid Stellar base asset address
      * @param {string} quoteAsset - Valid Stellar quote asset address
      * @param {number} timestamp - Timestamp in milliseconds
@@ -263,7 +275,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last asset price
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} asset - Valid Stellar asset address
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
@@ -279,7 +291,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last cross asset price
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} baseAsset - Valid Stellar base asset address
      * @param {string} quoteAsset - Valid Stellar quote asset address
      * @param {TxOptions} options - Transaction options
@@ -300,7 +312,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last asset price records
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} asset - Valid Stellar base asset address
      * @param {number} records - Number of records to return
      * @param {TxOptions} options - Transaction options
@@ -321,7 +333,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last cross asset price records
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} baseAsset - Valid Stellar base asset address
      * @param {string} quoteAsset - Valid Stellar quote asset address
      * @param {number} records - Number of records to return
@@ -344,7 +356,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get asset price records in a period
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} asset - Valid Stellar base asset address
      * @param {number} records - Number of records to return
      * @param {TxOptions} options - Transaction options
@@ -365,7 +377,7 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last cross asset price in a period
-     * @param {string} source - Valid Stellar account ID
+     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
      * @param {string} baseAsset - Valid Stellar base asset address
      * @param {string} quoteAsset - Valid Stellar quote asset address
      * @param {number} records - Number of records to return

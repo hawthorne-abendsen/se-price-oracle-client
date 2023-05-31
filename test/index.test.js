@@ -40,7 +40,7 @@ test('config', async () => {
         admin: admin.publicKey(),
         assets: contractConfig.assets.slice(0, initAssetLength),
         period: contractConfig.resolution * 10,
-        baseFee: {hi: '0', lo: '0'}
+        baseFee: {hi: '0', lo: '100'}
     })
 
     const signature = signTransaction(tx, admin.secret())

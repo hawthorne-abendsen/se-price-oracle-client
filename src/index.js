@@ -1,5 +1,3 @@
-const Client = require('./client')
+const OracleClient = require('./client')
 
-module.exports = {
-    Client
-}
+module.exports = OracleClient
