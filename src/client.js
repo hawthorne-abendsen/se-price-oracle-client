@@ -1,9 +1,10 @@
-const {Server, Contract, TransactionBuilder, Address, xdr, Transaction, Account, Memo} = require('soroban-client')
+const {Server, Contract, TransactionBuilder, Address, xdr, Transaction, Memo} = require('soroban-client')
 const AssetType = require('./asset-type')
 const {i128ToHiLo} = require('./utils/i128-helper')
 
 /**
  * @typedef {import('bignumber.js').default} BigNumber
+ * @typedef {import('soroban-client').Account} Account
  */
 
 /**
@@ -23,7 +24,7 @@ const {i128ToHiLo} = require('./utils/i128-helper')
 /**
  * @typedef {Object} TxOptions
  * @property {number} fee - Transaction fee in stroops
- * @property {number} timeout - Transaction timeout in seconds
+ * @property {number} timeout - Transaction timeout in seconds. Set to 0 to avoid different transactions for multisig accounts. Default is 0.
  * @property {string} memo - Transaction memo
  * @property {{min: number | Data, max: number | Date}} timebounds - Transaction timebounds
  * @property {string[]} signers - Transaction signers
@@ -36,18 +37,16 @@ const {i128ToHiLo} = require('./utils/i128-helper')
 
 /**
  * @param {OracleClient} client - Oracle client instance
- * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID
+ * @param {string|Account} source - Valid Stellar account ID, or Account object
  * @param {xdr.Operation} operation - Stellar operation
  * @param {TxOptions} options - Transaction options
  * @param {string} network - Stellar network
  * @returns {Promise<Transaction>}
  */
 async function buildTransaction(client, source, operation, options, network) {
-    let sourceAccount = null
+    let sourceAccount = source
 
-    if (typeof source === 'object')
-        sourceAccount = new Account(source.accountId, source.sequence)
-    else
+    if (typeof source !== 'object')
         sourceAccount = await client.server.getAccount(source)
 
     const txBuilderOptions = structuredClone(options)
@@ -56,7 +55,7 @@ async function buildTransaction(client, source, operation, options, network) {
 
     const transaction = new TransactionBuilder(sourceAccount, txBuilderOptions)
         .addOperation(operation)
-        .setTimeout(options.timeout)
+        .setTimeout(options.timeout || 0)
         .build()
 
     return await client.server.prepareTransaction(transaction, client.network)
@@ -64,7 +63,7 @@ async function buildTransaction(client, source, operation, options, network) {
 
 function getAccountId(source) {
     if (typeof source === 'object') {
-        return source.accountId
+        return source.accountId()
     }
     return source
 }
@@ -163,12 +162,12 @@ class OracleClient {
 
     /**
      * Builds a transaction to configure the oracle contract
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Config} config - Configuration object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async config(source, config, options = {fee: 100, timeout: 30}) {
+    async config(source, config, options = {fee: 100}) {
         const configScVal = xdr.ScVal.scvMap([
             new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('admin'), val: new Address(config.admin).toScVal()}),
             new xdr.ScMapEntry({
@@ -195,12 +194,12 @@ class OracleClient {
 
     /**
      * Builds a transaction to register assets
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset[]} assets - Array of assets
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async addAssets(source, assets, options = {fee: 100, timeout: 30}) {
+    async addAssets(source, assets, options = {fee: 100}) {
         return await buildTransaction(this,
             source,
             this.contract.call(
@@ -215,13 +214,13 @@ class OracleClient {
 
     /**
      * Builds a transaction to set prices
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {{asset: Asset, price: BigNumber}[]} updates - Array of prices
      * @param {number} timestamp - Timestamp in milliseconds
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async setPrice(source, updates, timestamp, options = {fee: 100, timeout: 30}) {
+    async setPrice(source, updates, timestamp, options = {fee: 100}) {
         const scValPrices = xdr.ScVal.scvVec(updates.sort((a, b) => sortAssets(a.asset, b.asset)).map(u => convertToPriceUpdateItem(u)))
         return await buildTransaction(
             this,
@@ -239,73 +238,73 @@ class OracleClient {
 
     /**
      * Builds a transaction to get admin
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async admin(source, options = {fee: 100, timeout: 30}) {
+    async admin(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('admin'), options, this.network)
     }
 
     /**
      * Builds a transaction to get base asset
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async base(source, options = {fee: 100, timeout: 30}) {
+    async base(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('base'), options, this.network)
     }
 
     /**
      * Builds a transaction to get decimals
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async decimals(source, options = {fee: 100, timeout: 30}) {
+    async decimals(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('decimals'), options, this.network)
     }
 
     /**
      * Builds a transaction to get resolution
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async resolution(source, options = {fee: 100, timeout: 30}) {
+    async resolution(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('resolution'), options, this.network)
     }
 
     /**
      * Builds a transaction to get retention period
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async period(source, options = {fee: 100, timeout: 30}) {
+    async period(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('period'), options, this.network)
     }
 
     /**
      * Builds a transaction to get supported assets
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async assets(source, options = {fee: 100, timeout: 30}) {
+    async assets(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('assets'), options, this.network)
     }
 
     /**
      * Builds a transaction to get asset price at timestamp
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} asset - Asset to get price for
      * @param {number} timestamp - Timestamp in milliseconds
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async price(source, asset, timestamp, options = {fee: 100, timeout: 30}) {
+    async price(source, asset, timestamp, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,
@@ -321,14 +320,14 @@ class OracleClient {
 
     /**
      * Builds a transaction to get cross asset price at timestamp
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} baseAsset - Base asset
      * @param {Asset} quoteAsset - Quote asset
      * @param {number} timestamp - Timestamp in milliseconds
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async xPrice(source, baseAsset, quoteAsset, timestamp, options = {fee: 100, timeout: 30}) {
+    async xPrice(source, baseAsset, quoteAsset, timestamp, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,
@@ -345,12 +344,12 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last asset price
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} asset - Asset to get price for
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async lastPrice(source, asset, options = {fee: 100, timeout: 30}) {
+    async lastPrice(source, asset, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,
@@ -362,13 +361,13 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last cross asset price
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} baseAsset - Base asset
      * @param {Asset} quoteAsset - Quote asset
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async xLastPrice(source, baseAsset, quoteAsset, options = {fee: 100, timeout: 30}) {
+    async xLastPrice(source, baseAsset, quoteAsset, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,
@@ -384,13 +383,13 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last asset price records
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} asset - Asset to get prices for
      * @param {number} records - Number of records to return
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async prices(source, asset, records, options = {fee: 100, timeout: 30}) {
+    async prices(source, asset, records, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,
@@ -406,14 +405,14 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last cross asset price records
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} baseAsset - Base asset
      * @param {Asset} quoteAsset - Quote asset
      * @param {number} records - Number of records to return
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async xPrices(source, baseAsset, quoteAsset, records, options = {fee: 100, timeout: 30}) {
+    async xPrices(source, baseAsset, quoteAsset, records, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,
@@ -430,13 +429,13 @@ class OracleClient {
 
     /**
      * Builds a transaction to get asset price records in a period
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} asset - Asset to get prices for
      * @param {number} records - Number of records to return
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async twap(source, asset, records, options = {fee: 100, timeout: 30}) {
+    async twap(source, asset, records, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,
@@ -452,14 +451,14 @@ class OracleClient {
 
     /**
      * Builds a transaction to get last cross asset price in a period
-     * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID, or object with accountId and sequence
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset} baseAsset - Base asset
      * @param {Asset} quoteAsset - Quote asset
      * @param {number} records - Number of records to return
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async xTwap(source, baseAsset, quoteAsset, records, options = {fee: 100, timeout: 30}) {
+    async xTwap(source, baseAsset, quoteAsset, records, options = {fee: 100}) {
         return await buildTransaction(
             this,
             source,

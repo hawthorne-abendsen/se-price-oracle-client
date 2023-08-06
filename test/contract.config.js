@@ -3,7 +3,7 @@ const AssetType = require('../src/asset-type.js')
 module.exports = {
     id: 'CDFXTZCMGMJPYGRNWXGIJIDF2WVY4LOF2OQL5XYG34J7LTX3NO3PJIXQ',
     decimals: 14,
-    resolution: 300000,
+    resolution: 30000,
     network: 'Test SDF Future Network ; October 2022',
     horizonUrl: 'https://rpc-futurenet.stellar.org:443',
     adminSecret: 'SAABHX5JQZJJSCGLU2KDMYAIAJOLHUR7PLRBRLGZ5OT45QYH6CQ6HGXS',

@@ -1,14 +1,11 @@
 /*eslint-disable no-undef */
 const crypto = require('crypto')
-const {Keypair} = require('soroban-client')
+const {exec} = require('child_process')
+const {Keypair, Server} = require('soroban-client')
 const {default: BigNumber} = require('bignumber.js')
 const Client = require('../src')
 const AssetType = require('../src/asset-type')
 const contractConfig = require('./contract.config')
-
-const admin = Keypair.fromSecret(contractConfig.adminSecret)
-const client = new Client(contractConfig.network, contractConfig.horizonUrl, contractConfig.id)
-const initTimestamp = normalize_timestamp(Date.now())
 
 if (contractConfig.assets.length < 2)
     throw new Error('Need at least 2 assets to run tests')
@@ -17,12 +14,55 @@ const initAssetLength = 1
 
 const extraAsset = {type: AssetType.GENERIC, code: 'JPY'}
 
+
 function normalize_timestamp(timestamp) {
     return Math.floor(timestamp / contractConfig.resolution) * contractConfig.resolution
 }
 const MAX_I128 = new BigNumber('170141183460469231731687303715884105727')
 const ADJUSTED_MAX = MAX_I128.dividedBy(new BigNumber(`1e+${contractConfig.decimals}`)) //divide by 10^14
+initTimestamp = normalize_timestamp(Date.now())
 
+let admin
+let account
+let contractId
+/**
+ * @type {Client}
+ */
+let client
+
+async function prepare() {
+    admin = Keypair.random()
+    const server = new Server(contractConfig.horizonUrl)
+
+    async function deployContract() {
+        const command = `soroban contract deploy --wasm ./test/se_price_oracle.wasm --source ${admin.secret()} --rpc-url ${contractConfig.horizonUrl} --network-passphrase "${contractConfig.network}"`
+        return await new Promise((resolve, reject) => {
+            exec(command, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`exec error: ${error}`)
+                    reject(error)
+                    return
+                }
+                if (stderr) {
+                    console.error(`stderr: ${stderr}`)
+                    reject(new Error(stderr))
+                    return
+                }
+                resolve(stdout.trim())
+            })
+        })
+    }
+
+    async function createAdminAccount() {
+        await server.requestAirdrop(admin.publicKey(), 'https://friendbot-futurenet.stellar.org')
+    }
+    await createAdminAccount()
+    contractId = await deployContract()
+
+    account = await server.getAccount(admin.publicKey())
+
+    client = new Client(contractConfig.network, contractConfig.horizonUrl, contractId)
+}
 
 function generateRandomI128() {
     //Generate a random 128-bit number
@@ -36,9 +76,8 @@ function generateRandomI128() {
     return randomNum
 }
 
-function signTransaction(transaction, secretKey) {
-    const keypair = Keypair.fromSecret(secretKey)
-    const signature = keypair.signDecorated(transaction.hash())
+function signTransaction(transaction) {
+    const signature = admin.signDecorated(transaction.hash())
     return signature
 }
 
@@ -47,15 +86,19 @@ const txOptions = {
     fee: 1000
 }
 
+beforeAll(async () => {
+    await prepare()
+}, 30000)
+
 test('config', async () => {
-    const tx = await client.config(admin.publicKey(), {
+    const tx = await client.config(account, {
         admin: admin.publicKey(),
         assets: contractConfig.assets.slice(0, initAssetLength),
         period: contractConfig.resolution * 10,
         baseFee: new BigNumber(1000)
     }, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx)
 
     const response = await client.submitTransaction(tx, [signature])
 
@@ -64,7 +107,7 @@ test('config', async () => {
 }, 30000)
 
 test('add_assets', async () => {
-    const tx = await client.addAssets(admin.publicKey(), contractConfig.assets.slice(initAssetLength), txOptions)
+    const tx = await client.addAssets(account, contractConfig.assets.slice(initAssetLength), txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -83,7 +126,7 @@ test('set_price', async () => {
             prices.push({asset, price: generateRandomI128()})
 
         const tx = await client.setPrice(
-            admin.publicKey(),
+            account,
             prices,
             timestamp,
             txOptions
@@ -109,7 +152,7 @@ test('set_price', async () => {
             prices.push({asset, price: generateRandomI128()})
 
         const tx = await client.setPrice(
-            admin.publicKey(),
+            account,
             prices,
             timestamp,
             txOptions
@@ -136,7 +179,7 @@ test('set_price (extra price)', async () => {
             prices.push({asset, price: generateRandomI128()})
 
         const tx = await client.setPrice(
-            admin.publicKey(),
+            account,
             prices,
             timestamp,
             txOptions
@@ -153,7 +196,7 @@ test('set_price (extra price)', async () => {
 }, 30000)
 
 test('add_asset (extra asset)', async () => {
-    const tx = await client.addAssets(admin.publicKey(), [extraAsset], txOptions)
+    const tx = await client.addAssets(account, [extraAsset], txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -166,7 +209,7 @@ test('add_asset (extra asset)', async () => {
 
 test('admin', async () => {
 
-    const tx = await client.admin(admin.publicKey(), txOptions)
+    const tx = await client.admin(account, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -178,7 +221,7 @@ test('admin', async () => {
 
 test('base', async () => {
 
-    const tx = await client.base(admin.publicKey(), txOptions)
+    const tx = await client.base(account, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -191,7 +234,7 @@ test('base', async () => {
 
 test('decimals', async () => {
 
-    const tx = await client.decimals(admin.publicKey(), txOptions)
+    const tx = await client.decimals(account, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -203,7 +246,7 @@ test('decimals', async () => {
 
 test('resolution', async () => {
 
-    const tx = await client.resolution(admin.publicKey(), txOptions)
+    const tx = await client.resolution(account, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -215,7 +258,7 @@ test('resolution', async () => {
 
 test('period', async () => {
 
-    const tx = await client.period(admin.publicKey(), txOptions)
+    const tx = await client.period(account, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -227,7 +270,7 @@ test('period', async () => {
 
 test('assets', async () => {
 
-    const tx = await client.assets(admin.publicKey(), txOptions)
+    const tx = await client.assets(account, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -238,7 +281,7 @@ test('assets', async () => {
 }, 30000)
 
 test('price', async () => {
-    const tx = await client.price(admin.publicKey(), contractConfig.assets[1], initTimestamp, txOptions)
+    const tx = await client.price(account, contractConfig.assets[1], initTimestamp, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -250,7 +293,7 @@ test('price', async () => {
 
 test('x_price', async () => {
 
-    const tx = await client.xPrice(admin.publicKey(),
+    const tx = await client.xPrice(account,
         contractConfig.assets[0],
         contractConfig.assets[1],
         initTimestamp,
@@ -266,7 +309,7 @@ test('x_price', async () => {
 
 test('lastprice', async () => {
 
-    const tx = await client.lastPrice(admin.publicKey(), contractConfig.assets[0], txOptions)
+    const tx = await client.lastPrice(account, contractConfig.assets[0], txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -278,7 +321,7 @@ test('lastprice', async () => {
 
 test('x_lt_price', async () => {
 
-    const tx = await client.xLastPrice(admin.publicKey(), contractConfig.assets[0], contractConfig.assets[1], txOptions)
+    const tx = await client.xLastPrice(account, contractConfig.assets[0], contractConfig.assets[1], txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -290,7 +333,7 @@ test('x_lt_price', async () => {
 
 test('prices', async () => {
 
-    const tx = await client.prices(admin.publicKey(), contractConfig.assets[0], 3, txOptions)
+    const tx = await client.prices(account, contractConfig.assets[0], 3, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -302,7 +345,7 @@ test('prices', async () => {
 
 test('x_prices', async () => {
 
-    const tx = await client.xPrices(admin.publicKey(), contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
+    const tx = await client.xPrices(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -314,7 +357,7 @@ test('x_prices', async () => {
 
 test('twap', async () => {
 
-    const tx = await client.twap(admin.publicKey(), contractConfig.assets[0], 3, txOptions)
+    const tx = await client.twap(account, contractConfig.assets[0], 3, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
@@ -326,7 +369,7 @@ test('twap', async () => {
 
 test('x_twap', async () => {
 
-    const tx = await client.xTwap(admin.publicKey(), contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
+    const tx = await client.xTwap(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
 
     const signature = signTransaction(tx, admin.secret())
 
