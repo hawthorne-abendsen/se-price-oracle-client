@@ -222,7 +222,7 @@ class OracleClient {
      * @returns {Promise<Transaction>} Prepared transaction
      */
     async setPrice(source, updates, timestamp, options = {fee: 100, timeout: 30}) {
-        const scValPrices = xdr.ScVal.scvVec(updates.sort((a, b) => sortAssets(a.asset, b.asset))).map(u => convertToPriceUpdateItem(u))
+        const scValPrices = xdr.ScVal.scvVec(updates.sort((a, b) => sortAssets(a.asset, b.asset)).map(u => convertToPriceUpdateItem(u)))
         return await buildTransaction(
             this,
             source,
