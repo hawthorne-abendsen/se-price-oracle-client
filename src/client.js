@@ -1,14 +1,23 @@
 const {Server, Contract, TransactionBuilder, Address, xdr, Transaction, Account, Memo} = require('soroban-client')
-const {default: BigNumber} = require('bignumber.js')
 const AssetType = require('./asset-type')
 const {i128ToHiLo} = require('./utils/i128-helper')
 
 /**
+ * @typedef {import('bignumber.js').default} BigNumber
+ */
+
+/**
+ * @typedef {Object} Asset
+ * @property {AssetType} type - Asset type
+ * @property {string} code - Asset code
+ */
+
+/**
  * @typedef {Object} Config
  * @property {string} admin - Valid Stellar account ID
- * @property {{type: number, asset: string}[]} assets - Array of assets
+ * @property {Asset[]} assets - Array of assets
  * @property {number} period - Redeem period in milliseconds
- * @property {{hi: string, lo: string}} baseFee - Base fee in stroops
+ * @property {BigNumber} baseFee - Base fee in stroops
  */
 
 /**
@@ -26,14 +35,8 @@ const {i128ToHiLo} = require('./utils/i128-helper')
  */
 
 /**
- * @typedef {Object} Asset
- * @property {AssetType} type - Asset type
- * @property {string} code - Asset code
- */
-
-/**
  * @param {OracleClient} client - Oracle client instance
- * @param {string} source - Valid Stellar account ID
+ * @param {string|{accountId: string, sequence: string}} source - Valid Stellar account ID
  * @param {xdr.Operation} operation - Stellar operation
  * @param {TxOptions} options - Transaction options
  * @param {string} network - Stellar network
@@ -103,6 +106,21 @@ function convertToPriceUpdateItem(priceUpdateItem) {
     ])
 }
 
+/**
+ *
+ * @param {Asset} a - Asset a
+ * @param {Asset} b - Asset b
+ * @returns {number}
+ */
+function sortAssets(a, b) {
+    //Compare by type first
+    if (a.type > b.type) return -1
+    if (a.type < b.type) return 1
+
+    //Compare by code
+    return a.code.localeCompare(b.code)
+}
+
 class OracleClient {
 
     /**
@@ -155,7 +173,7 @@ class OracleClient {
             new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('admin'), val: new Address(config.admin).toScVal()}),
             new xdr.ScMapEntry({
                 key: xdr.ScVal.scvSymbol('assets'),
-                val: xdr.ScVal.scvVec(config.assets.map(asset => buildAssetScVal(asset)))
+                val: xdr.ScVal.scvVec(config.assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
             }),
             new xdr.ScMapEntry({
                 key: xdr.ScVal.scvSymbol('base_fee'),
@@ -188,7 +206,7 @@ class OracleClient {
             this.contract.call(
                 'add_assets',
                 new Address(getAccountId(source)).toScVal(),
-                xdr.ScVal.scvVec(assets.map(asset => buildAssetScVal(asset)))
+                xdr.ScVal.scvVec(assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
             ),
             options,
             this.network
@@ -204,7 +222,7 @@ class OracleClient {
      * @returns {Promise<Transaction>} Prepared transaction
      */
     async setPrice(source, updates, timestamp, options = {fee: 100, timeout: 30}) {
-        const scValPrices = xdr.ScVal.scvVec(updates.map(u => convertToPriceUpdateItem(u)))
+        const scValPrices = xdr.ScVal.scvVec(updates.sort((a, b) => sortAssets(a.asset, b.asset))).map(u => convertToPriceUpdateItem(u))
         return await buildTransaction(
             this,
             source,
@@ -462,27 +480,22 @@ class OracleClient {
      * @returns {Promise<TransactionResponse>} Transaction response
      */
     async submitTransaction(transaction, signatures = []) {
-        try {
-            const txXdr = transaction.toXDR() //Get the raw XDR for the transaction to avoid modifying the transaction object
-            const tx = new Transaction(txXdr, this.network) //Create a new transaction object from the XDR
-            signatures.forEach(signature => tx.addDecoratedSignature(signature))
+        const txXdr = transaction.toXDR() //Get the raw XDR for the transaction to avoid modifying the transaction object
+        const tx = new Transaction(txXdr, this.network) //Create a new transaction object from the XDR
+        signatures.forEach(signature => tx.addDecoratedSignature(signature))
 
-            const submitResult = await this.server.sendTransaction(tx)
-            if (submitResult.status !== 'PENDING') {
-                throw new Error(`Transaction submit failed: ${submitResult.status}`)
-            }
-            const hash = submitResult.hash
-            let response = await this.getTransaction(hash)
-            while (response.status === "PENDING" || response.status === "NOT_FOUND") {
-                response = await this.getTransaction(hash)
-                await new Promise(resolve => setTimeout(resolve, 500))
-            }
-            response.hash = hash //Add hash to response to avoid return new object
-            return response
-        } catch (e) {
-            console.error(e)
-            throw e
+        const submitResult = await this.server.sendTransaction(tx)
+        if (submitResult.status !== 'PENDING') {
+            throw new Error(`Transaction submit failed: ${submitResult.status}`)
         }
+        const hash = submitResult.hash
+        let response = await this.getTransaction(hash)
+        while (response.status === "PENDING" || response.status === "NOT_FOUND") {
+            response = await this.getTransaction(hash)
+            await new Promise(resolve => setTimeout(resolve, 500))
+        }
+        response.hash = hash //Add hash to response to avoid return new object
+        return response
     }
 
     /**
