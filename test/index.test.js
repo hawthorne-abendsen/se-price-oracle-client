@@ -177,10 +177,9 @@ test('set_price', async () => {
 test('set_price (extra price)', async () => {
 
     let timestamp = initTimestamp
-
+    contractConfig.assets.push(extraAsset)
     for (let i = 0; i < 3; i++) {
         const prices = []
-        contractConfig.assets.push(extraAsset)
         for (const asset of contractConfig.assets)
             prices.push({asset, price: generateRandomI128()})
 
@@ -294,148 +293,148 @@ test('period', async () => {
 
 }, 300000)
 
-//test('assets', async () => {
+test('assets', async () => {
 
-//const tx = await client.assets(account, txOptions)
+    const tx = await client.assets(account, txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const assets = Client.parseAssetsResult(response.resultMetaXdr)
+    const assets = Client.parseAssetsResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Assets: ${assets.map(a => assetToString(a)).join(', ')}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Assets: ${assets.map(a => assetToString(a)).join(', ')}`)
 
-//expect(assets.length).toEqual(contractConfig.assets.concat(extraAsset).length)
+    expect(assets.length).toEqual(contractConfig.assets.length)
 
-//}, 300000)
+}, 300000)
 
-//test('price', async () => {
-//const tx = await client.price(account, contractConfig.assets[1], initTimestamp, txOptions)
+test('price', async () => {
+    const tx = await client.price(account, contractConfig.assets[1], initTimestamp, txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const price = Client.parsePriceResult(response.resultMetaXdr)
+    const price = Client.parsePriceResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
 
-//expect(price).anything()
-//}, 300000)
+    expect(price).toBeDefined()
+}, 300000)
 
-//test('x_price', async () => {
+test('x_price', async () => {
 
-//const tx = await client.xPrice(account,
-//contractConfig.assets[0],
-//contractConfig.assets[1],
-//initTimestamp,
-//txOptions)
+    const tx = await client.xPrice(account,
+        contractConfig.assets[0],
+        contractConfig.assets[1],
+        initTimestamp,
+        txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const price = Client.parsePriceResult(response.resultMetaXdr)
+    const price = Client.parsePriceResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
 
-//expect(price).anything()
+    expect(price).toBeDefined()
 
-//}, 300000)
+}, 300000)
 
-//test('lastprice', async () => {
+test('lastprice', async () => {
 
-//const tx = await client.lastPrice(account, contractConfig.assets[0], txOptions)
+    const tx = await client.lastPrice(account, contractConfig.assets[0], txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const price = Client.parsePriceResult(response.resultMetaXdr)
+    const price = Client.parsePriceResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
 
-//expect(price).anything()
+    expect(price).toBeDefined()
 
-//}, 300000)
+}, 300000)
 
-//test('x_lt_price', async () => {
+test('x_lt_price', async () => {
 
-//const tx = await client.xLastPrice(account, contractConfig.assets[0], contractConfig.assets[1], txOptions)
+    const tx = await client.xLastPrice(account, contractConfig.assets[0], contractConfig.assets[1], txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const price = Client.parsePriceResult(response.resultMetaXdr)
+    const price = Client.parsePriceResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Price: ${priceToString(price)}`)
 
-//expect(price).anything()
+    expect(price).toBeDefined()
 
-//}, 300000)
+}, 300000)
 
-//test('prices', async () => {
+test('prices', async () => {
 
-//const tx = await client.prices(account, contractConfig.assets[0], 3, txOptions)
+    const tx = await client.prices(account, contractConfig.assets[0], 3, txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const prices = Client.parsePricesResult(response.resultMetaXdr)
+    const prices = Client.parsePricesResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Prices: ${prices.map(p => priceToString(p)).join(', ')}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Prices: ${prices.map(p => priceToString(p)).join(', ')}`)
 
-//expect(prices.length > 0).toBe(true)
+    expect(prices.length > 0).toBe(true)
 
-//}, 300000)
+}, 300000)
 
-//test('x_prices', async () => {
+test('x_prices', async () => {
 
-//const tx = await client.xPrices(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
+    const tx = await client.xPrices(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const prices = Client.parsePricesResult(response.resultMetaXdr)
+    const prices = Client.parsePricesResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Prices: ${prices.map(p => priceToString(p)).join(', ')}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Prices: ${prices.map(p => priceToString(p)).join(', ')}`)
 
-//expect(prices.length > 0).toBe(true)
+    expect(prices.length > 0).toBe(true)
 
-//}, 300000)
+}, 300000)
 
-//test('twap', async () => {
+test('twap', async () => {
 
-//const tx = await client.twap(account, contractConfig.assets[0], 3, txOptions)
+    const tx = await client.twap(account, contractConfig.assets[0], 3, txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const twap = Client.parseTwapResult(response.resultMetaXdr)
+    const twap = Client.parseTwapResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Twap: ${twap.toString()}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Twap: ${twap.toString()}`)
 
-//expect(twap.isGreaterThan(0)).toBe(true)
+    expect(twap.isGreaterThan(0)).toBe(true)
 
-//}, 300000)
+}, 300000)
 
-//test('x_twap', async () => {
+test('x_twap', async () => {
 
-//const tx = await client.xTwap(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
+    const tx = await client.xTwap(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
 
-//const signature = signTransaction(tx, admin.secret())
+    const signature = signTransaction(tx, admin.secret())
 
-//const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, [signature])
 
-//const twap = Client.parseTwapResult(response.resultMetaXdr)
+    const twap = Client.parseTwapResult(response.resultMetaXdr)
 
-//console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Twap: ${twap.toString()}`)
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Twap: ${twap.toString()}`)
 
-//expect(twap.isGreaterThan(0)).toBe(true)
+    expect(twap.isGreaterThan(0)).toBe(true)
 
-//}, 300000)
+}, 300000)
