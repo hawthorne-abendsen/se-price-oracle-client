@@ -1,9 +1,9 @@
-const {Server, Contract, TransactionBuilder, Address, xdr, Transaction, Memo} = require('soroban-client')
+const {Server, Contract, TransactionBuilder, Address, xdr, Transaction, Memo, Keypair} = require('soroban-client')
+const {default: BigNumber} = require('bignumber.js')
 const AssetType = require('./asset-type')
-const {i128ToHiLo} = require('./utils/i128-helper')
+const {i128ToHiLo, hiLoToI128} = require('./utils/i128-helper')
 
 /**
- * @typedef {import('bignumber.js').default} BigNumber
  * @typedef {import('soroban-client').Account} Account
  */
 
@@ -11,6 +11,12 @@ const {i128ToHiLo} = require('./utils/i128-helper')
  * @typedef {Object} Asset
  * @property {AssetType} type - Asset type
  * @property {string} code - Asset code
+ */
+
+/**
+ * @typedef {Object} Price
+ * @property {BigNumber} price - Price
+ * @property {BigNumber} timestamp - Timestamp
  */
 
 /**
@@ -118,6 +124,41 @@ function sortAssets(a, b) {
 
     //Compare by code
     return a.code.localeCompare(b.code)
+}
+
+/**
+ * @param {any} result - XDR result meta
+ * @returns {number}
+ */
+function getSorobanResultValue(result) {
+    return xdr.TransactionMeta.fromXDR(result, 'base64').value().sorobanMeta().returnValue().value()
+}
+
+/**
+ * @param {any} xdrAsset - XDR asset
+ * @returns {Asset}
+ */
+function parseXdrAssetResult(xdrAsset) {
+    const assetType = xdrAsset[0].value().toString()
+    switch (AssetType[assetType.toUpperCase()]) {
+        case AssetType.GENERIC:
+            return {type: AssetType.GENERIC, code: xdrAsset[1].value().toString()}
+        case AssetType.STELLAR:
+            return {type: AssetType.STELLAR, code: Address.contract(xdrAsset[1].value().value()).toString()}
+        default:
+            throw new Error(`Unknown asset type: ${assetType}`)
+    }
+}
+
+/**
+ * @param {any} xdrPrice - XDR price object
+ * @returns {{price: BigNumber, timestamp: BigNumber}}
+ */
+function parseXdrPriceResult(xdrPrice) {
+    return {
+        price: hiLoToI128(xdrPrice[0].val().value().hi(), xdrPrice[0].val().value().lo()),
+        timestamp: new BigNumber(xdrPrice[1].val().value())
+    }
 }
 
 class OracleClient {
@@ -503,6 +544,76 @@ class OracleClient {
      */
     async getTransaction(hash) {
         return await this.server.getTransaction(hash)
+    }
+
+    /**
+     * @param {string} result - Trasanction meta XDR
+     * @returns {string} - Keypair public key
+     */
+    static parseAdminResult(result) {
+        const adminBuffer = getSorobanResultValue(result).value().value()
+        const adminPublicKey = new Keypair({type: 'ed25519', publicKey: adminBuffer})
+        return adminPublicKey.publicKey()
+    }
+
+    /**
+     * @param {string} result - Trasanction meta XDR
+     * @returns {Asset} - Asset object
+     */
+    static parseBaseResult(result) {
+        const val = getSorobanResultValue(result)
+        return parseXdrAssetResult(val)
+    }
+
+    /**
+     * @param {string} result - Trasanction meta XDR
+     * @returns {number} - Number value
+     */
+    static parseNumberResult(result) {
+        const val = getSorobanResultValue(result)
+        return Number(val)
+    }
+
+    /**
+     * @param {string} result - Trasanction meta XDR
+     * @returns {Asset[]} - Array of asset objects
+     */
+    static parseAssetsResult(result) {
+        const val = getSorobanResultValue(result)
+        const assets = []
+        for (const asset of val)
+            assets.push(parseXdrAssetResult(asset.value()))
+        return assets
+    }
+
+    /**
+     * @param {string} result - Trasanction meta XDR
+     * @returns {Price} - Price object
+     */
+    static parsePriceResult(result) {
+        const val = getSorobanResultValue(result)
+        return parseXdrPriceResult(val)
+    }
+
+    /**
+     * @param {string} result - Trasanction meta XDR
+     * @returns {Price[]} - Array of price objects
+     */
+    static parsePricesResult(result) {
+        const val = getSorobanResultValue(result)
+        const prices = []
+        for (const price of val)
+            prices.push(parseXdrPriceResult(price.value()))
+        return prices
+    }
+
+    /**
+     * @param {string} result - Trasanction meta XDR
+     * @returns {BigNumber} - twap value
+     */
+    static parseTwapResult(result) {
+        const val = getSorobanResultValue(result)
+        return hiLoToI128(val.hi(), val.lo())
     }
 }
 
