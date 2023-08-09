@@ -1,8 +1,7 @@
 /*eslint-disable no-undef */
 const crypto = require('crypto')
 const {exec} = require('child_process')
-const {assert} = require('console')
-const {Keypair, Server, xdr} = require('soroban-client')
+const {Keypair, Server} = require('soroban-client')
 const {default: BigNumber} = require('bignumber.js')
 const Client = require('../src')
 const AssetType = require('../src/asset-type')
@@ -436,5 +435,20 @@ test('x_twap', async () => {
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Twap: ${twap.toString()}`)
 
     expect(twap.isGreaterThan(0)).toBe(true)
+
+}, 300000)
+
+test('lasttimestamp', async () => {
+    const tx = await client.lastTimestamp(account, txOptions)
+
+    const signature = signTransaction(tx, admin.secret())
+
+    const response = await client.submitTransaction(tx, [signature])
+
+    const timestamp = Client.parseNumberResult(response.resultMetaXdr)
+
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Timestamp: ${timestamp}`)
+
+    expect(timestamp).toBeGreaterThan(0)
 
 }, 300000)

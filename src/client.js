@@ -337,6 +337,10 @@ class OracleClient {
         return await buildTransaction(this, source, this.contract.call('assets'), options, this.network)
     }
 
+    async lastTimestamp(source, options = {fee: 100}) {
+        return await buildTransaction(this, source, this.contract.call('last_timestamp'), options, this.network)
+    }
+
     /**
      * Builds a transaction to get asset price at timestamp
      * @param {string|Account} source - Valid Stellar account ID, or Account object
