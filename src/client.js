@@ -24,6 +24,7 @@ const {i128ToHiLo, hiLoToI128} = require('./utils/i128-helper')
  * @property {string} admin - Valid Stellar account ID
  * @property {Asset[]} assets - Array of assets
  * @property {number} period - Redeem period in milliseconds
+ * @property {number} version - Contract version
  * @property {BigNumber} baseFee - Base fee in stroops
  */
 
@@ -209,28 +210,36 @@ class OracleClient {
      * @returns {Promise<Transaction>} Prepared transaction
      */
     async config(source, config, options = {fee: 100}) {
-        const configScVal = xdr.ScVal.scvMap([
-            new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('admin'), val: new Address(config.admin).toScVal()}),
-            new xdr.ScMapEntry({
-                key: xdr.ScVal.scvSymbol('assets'),
-                val: xdr.ScVal.scvVec(config.assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
-            }),
-            new xdr.ScMapEntry({
-                key: xdr.ScVal.scvSymbol('base_fee'),
-                val: convertToI128ScVal(config.baseFee)
-            }),
-            new xdr.ScMapEntry({
-                key: xdr.ScVal.scvSymbol('period'),
-                val: xdr.ScVal.scvU64(xdr.Uint64.fromString(config.period.toString()))
-            })
-        ])
-        return await buildTransaction(
-            this,
-            source,
-            this.contract.call('config', new Address(getAccountId(source)).toScVal(), configScVal),
-            options,
-            this.network
-        )
+        try {
+            const configScVal = xdr.ScVal.scvMap([
+                new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('admin'), val: new Address(config.admin).toScVal()}),
+                new xdr.ScMapEntry({
+                    key: xdr.ScVal.scvSymbol('assets'),
+                    val: xdr.ScVal.scvVec(config.assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
+                }),
+                new xdr.ScMapEntry({
+                    key: xdr.ScVal.scvSymbol('base_fee'),
+                    val: convertToI128ScVal(config.baseFee)
+                }),
+                new xdr.ScMapEntry({
+                    key: xdr.ScVal.scvSymbol('period'),
+                    val: xdr.ScVal.scvU64(xdr.Uint64.fromString(config.period.toString()))
+                }),
+                new xdr.ScMapEntry({
+                    key: xdr.ScVal.scvSymbol('version'),
+                    val: xdr.ScVal.scvU32(config.version)
+                })
+            ])
+            return await buildTransaction(
+                this,
+                source,
+                this.contract.call('config', new Address(getAccountId(source)).toScVal(), configScVal),
+                options,
+                this.network
+            )
+        } catch (e) {
+            console.log(e)
+        }
     }
 
     /**
@@ -337,8 +346,24 @@ class OracleClient {
         return await buildTransaction(this, source, this.contract.call('assets'), options, this.network)
     }
 
+    /**
+     * Builds a transaction to get last timestamp
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
+     * @param {TxOptions} options - Transaction options
+     * @returns {Promise<Transaction>} Prepared transaction
+     */
     async lastTimestamp(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('last_timestamp'), options, this.network)
+    }
+
+    /**
+     * Builds a transaction to get last config version
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
+     * @param {TxOptions} options - Transaction options
+     * @returns {Promise<Transaction>} Prepared transaction
+     */
+    async configVersion(source, options = {fee: 100}) {
+        return await buildTransaction(this, source, this.contract.call('config_version'), options, this.network)
     }
 
     /**
@@ -555,7 +580,9 @@ class OracleClient {
      * @returns {string} - Keypair public key
      */
     static parseAdminResult(result) {
-        const adminBuffer = getSorobanResultValue(result).value().value()
+        const adminBuffer = getSorobanResultValue(result)?.value()?.value()
+        if (adminBuffer === undefined)
+            return null
         const adminPublicKey = new Keypair({type: 'ed25519', publicKey: adminBuffer})
         return adminPublicKey.publicKey()
     }
@@ -566,6 +593,8 @@ class OracleClient {
      */
     static parseBaseResult(result) {
         const val = getSorobanResultValue(result)
+        if (val === undefined)
+            return null
         return parseXdrAssetResult(val)
     }
 
@@ -575,6 +604,8 @@ class OracleClient {
      */
     static parseNumberResult(result) {
         const val = getSorobanResultValue(result)
+        if (val === undefined)
+            return null
         return Number(val)
     }
 
@@ -584,6 +615,8 @@ class OracleClient {
      */
     static parseAssetsResult(result) {
         const val = getSorobanResultValue(result)
+        if (val === undefined)
+            return null
         const assets = []
         for (const asset of val)
             assets.push(parseXdrAssetResult(asset.value()))
@@ -596,6 +629,8 @@ class OracleClient {
      */
     static parsePriceResult(result) {
         const val = getSorobanResultValue(result)
+        if (val === undefined)
+            return null
         return parseXdrPriceResult(val)
     }
 
@@ -605,6 +640,8 @@ class OracleClient {
      */
     static parsePricesResult(result) {
         const val = getSorobanResultValue(result)
+        if (val === undefined)
+            return null
         const prices = []
         for (const price of val)
             prices.push(parseXdrPriceResult(price.value()))
@@ -617,6 +654,8 @@ class OracleClient {
      */
     static parseTwapResult(result) {
         const val = getSorobanResultValue(result)
+        if (val === undefined)
+            return null
         return hiLoToI128(val.hi(), val.lo())
     }
 }
