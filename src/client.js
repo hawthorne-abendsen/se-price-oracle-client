@@ -210,36 +210,32 @@ class OracleClient {
      * @returns {Promise<Transaction>} Prepared transaction
      */
     async config(source, config, options = {fee: 100}) {
-        try {
-            const configScVal = xdr.ScVal.scvMap([
-                new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('admin'), val: new Address(config.admin).toScVal()}),
-                new xdr.ScMapEntry({
-                    key: xdr.ScVal.scvSymbol('assets'),
-                    val: xdr.ScVal.scvVec(config.assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
-                }),
-                new xdr.ScMapEntry({
-                    key: xdr.ScVal.scvSymbol('base_fee'),
-                    val: convertToI128ScVal(config.baseFee)
-                }),
-                new xdr.ScMapEntry({
-                    key: xdr.ScVal.scvSymbol('period'),
-                    val: xdr.ScVal.scvU64(xdr.Uint64.fromString(config.period.toString()))
-                }),
-                new xdr.ScMapEntry({
-                    key: xdr.ScVal.scvSymbol('version'),
-                    val: xdr.ScVal.scvU32(config.version)
-                })
-            ])
-            return await buildTransaction(
-                this,
-                source,
-                this.contract.call('config', new Address(getAccountId(source)).toScVal(), configScVal),
-                options,
-                this.network
-            )
-        } catch (e) {
-            console.log(e)
-        }
+        const configScVal = xdr.ScVal.scvMap([
+            new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('admin'), val: new Address(config.admin).toScVal()}),
+            new xdr.ScMapEntry({
+                key: xdr.ScVal.scvSymbol('assets'),
+                val: xdr.ScVal.scvVec(config.assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
+            }),
+            new xdr.ScMapEntry({
+                key: xdr.ScVal.scvSymbol('base_fee'),
+                val: convertToI128ScVal(config.baseFee)
+            }),
+            new xdr.ScMapEntry({
+                key: xdr.ScVal.scvSymbol('period'),
+                val: xdr.ScVal.scvU64(xdr.Uint64.fromString(config.period.toString()))
+            }),
+            new xdr.ScMapEntry({
+                key: xdr.ScVal.scvSymbol('version'),
+                val: xdr.ScVal.scvU32(config.version)
+            })
+        ])
+        return await buildTransaction(
+            this,
+            source,
+            this.contract.call('config', new Address(getAccountId(source)).toScVal(), configScVal),
+            options,
+            this.network
+        )
     }
 
     /**

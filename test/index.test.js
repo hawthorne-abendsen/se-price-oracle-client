@@ -1,7 +1,7 @@
 /*eslint-disable no-undef */
 const crypto = require('crypto')
 const {exec} = require('child_process')
-const {Keypair, Server} = require('soroban-client')
+const {Keypair, Server, TransactionBuilder, Operation} = require('soroban-client')
 const {default: BigNumber} = require('bignumber.js')
 const Client = require('../src')
 const AssetType = require('../src/asset-type')
@@ -29,14 +29,33 @@ period = contractConfig.resolution * 10
 
 let admin
 let account
+let nodesKeypairs
 let contractId
 /**
  * @type {Client}
  */
 let client
 
+function getMajority(totalSignersCount) {
+    return Math.floor(totalSignersCount / 2) + 1
+}
+
+async function sendTransaction(server, tx) {
+    let result = await server.sendTransaction(tx)
+    const hash = result.hash
+    while (result.status === 'PENDING' || result.status === 'NOT_FOUND') {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        result = await server.getTransaction(hash)
+    }
+    if (result.status !== 'SUCCESS') {
+        throw new Error(`Failed to create multisig account: ${result}`)
+    }
+    return result
+}
+
 async function prepare() {
     admin = Keypair.random()
+    nodesKeypairs = Array.from({length: 5}, () => (Keypair.random()))
     const server = new Server(contractConfig.horizonUrl)
 
     async function deployContract() {
@@ -66,6 +85,40 @@ async function prepare() {
 
     account = await server.getAccount(admin.publicKey())
 
+    async function updateAdminToMultiSigAccount() {
+        const majorityCount = getMajority(nodesKeypairs.length)
+        let txBuilder = new TransactionBuilder(account, {fee: 100, networkPassphrase: contractConfig.network})
+        txBuilder = txBuilder
+            .setTimeout(30000)
+            .addOperation(
+                Operation.setOptions({
+                    masterWeight: 0,
+                    lowThreshold: majorityCount,
+                    medThreshold: majorityCount,
+                    highThreshold: majorityCount
+                })
+            )
+
+        for (const nodeKeypair of nodesKeypairs) {
+            txBuilder = txBuilder.addOperation(
+                Operation.setOptions({
+                    signer: {
+                        ed25519PublicKey: nodeKeypair.publicKey(),
+                        weight: 1
+                    }
+                })
+            )
+        }
+
+        const tx = txBuilder.build()
+
+        tx.sign(admin)
+
+        await sendTransaction(server, tx)
+    }
+
+    await updateAdminToMultiSigAccount()
+
     client = new Client(contractConfig.network, contractConfig.horizonUrl, contractId)
 }
 
@@ -82,8 +135,15 @@ function generateRandomI128() {
 }
 
 function signTransaction(transaction) {
-    const signature = admin.signDecorated(transaction.hash())
-    return signature
+    const shuffledSigners = nodesKeypairs.sort(() => 0.5 - Math.random())
+    const selectedSigners = shuffledSigners.slice(0, getMajority(nodesKeypairs.length))
+    const txHash = transaction.hash()
+    const signatures = []
+    for (const signer of selectedSigners) {
+        const signature = signer.signDecorated(txHash)
+        signatures.push(signature)
+    }
+    return signatures
 }
 
 const txOptions = {
@@ -104,9 +164,9 @@ test('config', async () => {
         version: 1
     }, txOptions)
 
-    const signature = signTransaction(tx)
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 
@@ -115,9 +175,9 @@ test('config', async () => {
 test('add_assets', async () => {
     const tx = await client.addAssets(account, contractConfig.assets.slice(initAssetLength), txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 }, 300000)
@@ -138,9 +198,9 @@ test('set_price', async () => {
             txOptions
         )
 
-        const signature = signTransaction(tx, admin.secret())
+        const signatures = signTransaction(tx)
 
-        const response = await client.submitTransaction(tx, [signature])
+        const response = await client.submitTransaction(tx, signatures)
 
         console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 
@@ -164,9 +224,9 @@ test('set_price', async () => {
             txOptions
         )
 
-        const signature = signTransaction(tx, admin.secret())
+        const signatures = signTransaction(tx)
 
-        const response = await client.submitTransaction(tx, [signature])
+        const response = await client.submitTransaction(tx, signatures)
 
         console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 
@@ -190,9 +250,9 @@ test('set_price (extra price)', async () => {
             txOptions
         )
 
-        const signature = signTransaction(tx, admin.secret())
+        const signatures = signTransaction(tx)
 
-        const response = await client.submitTransaction(tx, [signature])
+        const response = await client.submitTransaction(tx, signatures)
 
         console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 
@@ -203,9 +263,9 @@ test('set_price (extra price)', async () => {
 test('add_asset (extra asset)', async () => {
     const tx = await client.addAssets(account, [extraAsset], txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 }, 300000)
@@ -213,9 +273,9 @@ test('add_asset (extra asset)', async () => {
 test('config_version', async () => {
     const tx = await client.configVersion(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 
@@ -231,9 +291,9 @@ test('admin', async () => {
 
     const tx = await client.admin(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const adminPublicKey = Client.parseAdminResult(response.resultMetaXdr)
 
@@ -247,9 +307,9 @@ test('base', async () => {
 
     const tx = await client.base(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const base = Client.parseBaseResult(response.resultMetaXdr)
 
@@ -264,9 +324,9 @@ test('decimals', async () => {
 
     const tx = await client.decimals(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const decimals = Client.parseNumberResult(response.resultMetaXdr)
 
@@ -280,9 +340,9 @@ test('resolution', async () => {
 
     const tx = await client.resolution(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const resolution = Client.parseNumberResult(response.resultMetaXdr)
 
@@ -296,9 +356,9 @@ test('period', async () => {
 
     const tx = await client.period(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const periodValue = Client.parseNumberResult(response.resultMetaXdr)
 
@@ -312,9 +372,9 @@ test('assets', async () => {
 
     const tx = await client.assets(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const assets = Client.parseAssetsResult(response.resultMetaXdr)
 
@@ -327,9 +387,9 @@ test('assets', async () => {
 test('price', async () => {
     const tx = await client.price(account, contractConfig.assets[1], initTimestamp, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const price = Client.parsePriceResult(response.resultMetaXdr)
 
@@ -346,9 +406,9 @@ test('x_price', async () => {
         initTimestamp,
         txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const price = Client.parsePriceResult(response.resultMetaXdr)
 
@@ -362,9 +422,9 @@ test('lastprice', async () => {
 
     const tx = await client.lastPrice(account, contractConfig.assets[0], txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const price = Client.parsePriceResult(response.resultMetaXdr)
 
@@ -378,9 +438,9 @@ test('x_lt_price', async () => {
 
     const tx = await client.xLastPrice(account, contractConfig.assets[0], contractConfig.assets[1], txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const price = Client.parsePriceResult(response.resultMetaXdr)
 
@@ -394,9 +454,9 @@ test('prices', async () => {
 
     const tx = await client.prices(account, contractConfig.assets[0], 3, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const prices = Client.parsePricesResult(response.resultMetaXdr)
 
@@ -410,9 +470,9 @@ test('x_prices', async () => {
 
     const tx = await client.xPrices(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const prices = Client.parsePricesResult(response.resultMetaXdr)
 
@@ -426,9 +486,9 @@ test('twap', async () => {
 
     const tx = await client.twap(account, contractConfig.assets[0], 3, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const twap = Client.parseTwapResult(response.resultMetaXdr)
 
@@ -442,9 +502,9 @@ test('x_twap', async () => {
 
     const tx = await client.xTwap(account, contractConfig.assets[0], contractConfig.assets[1], 3, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const twap = Client.parseTwapResult(response.resultMetaXdr)
 
@@ -457,9 +517,9 @@ test('x_twap', async () => {
 test('lasttimestamp', async () => {
     const tx = await client.lastTimestamp(account, txOptions)
 
-    const signature = signTransaction(tx, admin.secret())
+    const signatures = signTransaction(tx)
 
-    const response = await client.submitTransaction(tx, [signature])
+    const response = await client.submitTransaction(tx, signatures)
 
     const timestamp = Client.parseNumberResult(response.resultMetaXdr)
 
