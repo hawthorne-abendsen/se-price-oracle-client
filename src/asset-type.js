@@ -4,8 +4,8 @@
  * @enum {number}
  */
 const AssetType = {
-    STELLAR: 1,
-    GENERIC: 2
+    S: 1,
+    G: 2
 }
 
 module.exports = AssetType

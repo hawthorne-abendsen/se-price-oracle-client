@@ -12,11 +12,13 @@ if (contractConfig.assets.length < 2)
 
 const initAssetLength = 1
 
-const extraAsset = {type: AssetType.GENERIC, code: 'JPY'}
+const server = new Server(contractConfig.horizonUrl)
 
-const assetToString = (asset) => `${asset.type}:${asset.code}`
+const extraAsset = {type: AssetType.G, code: 'JPY'}
 
-const priceToString = (price) => `{price: ${price.price.toString()}, timestamp: ${price.timestamp.toString()}}`
+const assetToString = (asset) => !asset ? 'null' : `${asset.type}:${asset.code}`
+
+const priceToString = (price) => !price ? 'null' : `{price: ${price.price.toString()}, timestamp: ${price.timestamp.toString()}}`
 
 
 function normalize_timestamp(timestamp) {
@@ -24,8 +26,8 @@ function normalize_timestamp(timestamp) {
 }
 const MAX_I128 = new BigNumber('170141183460469231731687303715884105727')
 const ADJUSTED_MAX = MAX_I128.dividedBy(new BigNumber(`1e+${contractConfig.decimals}`)) //divide by 10^14
-initTimestamp = normalize_timestamp(Date.now())
-period = contractConfig.resolution * 10
+let lastTimestamp = normalize_timestamp(Date.now())
+const period = contractConfig.resolution * 10
 
 let admin
 let account
@@ -48,15 +50,18 @@ async function sendTransaction(server, tx) {
         result = await server.getTransaction(hash)
     }
     if (result.status !== 'SUCCESS') {
-        throw new Error(`Failed to create multisig account: ${result}`)
+        throw new Error(`Tx failed: ${result}`)
     }
     return result
+}
+
+async function createAccount(publicKey) {
+    return await server.requestAirdrop(publicKey, 'https://friendbot-futurenet.stellar.org')
 }
 
 async function prepare() {
     admin = Keypair.random()
     nodesKeypairs = Array.from({length: 5}, () => (Keypair.random()))
-    const server = new Server(contractConfig.horizonUrl)
 
     async function deployContract() {
         const command = `soroban contract deploy --wasm ./test/se_price_oracle.wasm --source ${admin.secret()} --rpc-url ${contractConfig.horizonUrl} --network-passphrase "${contractConfig.network}"`
@@ -76,12 +81,10 @@ async function prepare() {
             })
         })
     }
-
-    async function createAdminAccount() {
-        await server.requestAirdrop(admin.publicKey(), 'https://friendbot-futurenet.stellar.org')
-    }
-    await createAdminAccount()
+    await createAccount(admin.publicKey())
     contractId = await deployContract()
+
+    console.log(`Contract ID: ${contractId}`)
 
     account = await server.getAccount(admin.publicKey())
 
@@ -183,14 +186,10 @@ test('add_assets', async () => {
 }, 300000)
 
 test('set_price', async () => {
-
-    let timestamp = initTimestamp
-
     for (let i = 0; i < 3; i++) {
-        const prices = []
-        for (const asset of contractConfig.assets)
-            prices.push({asset, price: generateRandomI128()})
+        const prices = Array.from({length: contractConfig.assets.length}, () => generateRandomI128())
 
+        const timestamp = lastTimestamp += contractConfig.resolution
         const tx = await client.setPrice(
             account,
             prices,
@@ -203,20 +202,15 @@ test('set_price', async () => {
         const response = await client.submitTransaction(tx, signatures)
 
         console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
-
-        timestamp += contractConfig.resolution
     }
 }, 300000)
 
 test('set_price', async () => {
 
-    let timestamp = initTimestamp
-
     for (let i = 0; i < 3; i++) {
-        const prices = []
-        for (const asset of contractConfig.assets)
-            prices.push({asset, price: generateRandomI128()})
+        const prices = Array.from({length: contractConfig.assets.length}, () => generateRandomI128())
 
+        const timestamp = lastTimestamp += contractConfig.resolution
         const tx = await client.setPrice(
             account,
             prices,
@@ -229,20 +223,16 @@ test('set_price', async () => {
         const response = await client.submitTransaction(tx, signatures)
 
         console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
-
-        timestamp += contractConfig.resolution
     }
 }, 300000)
 
 test('set_price (extra price)', async () => {
 
-    let timestamp = initTimestamp
     contractConfig.assets.push(extraAsset)
     for (let i = 0; i < 3; i++) {
-        const prices = []
-        for (const asset of contractConfig.assets)
-            prices.push({asset, price: generateRandomI128()})
+        const prices = Array.from({length: contractConfig.assets.length}, () => generateRandomI128())
 
+        const timestamp = lastTimestamp += contractConfig.resolution
         const tx = await client.setPrice(
             account,
             prices,
@@ -255,8 +245,6 @@ test('set_price (extra price)', async () => {
         const response = await client.submitTransaction(tx, signatures)
 
         console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
-
-        timestamp += contractConfig.resolution
     }
 }, 300000)
 
@@ -385,7 +373,7 @@ test('assets', async () => {
 }, 300000)
 
 test('price', async () => {
-    const tx = await client.price(account, contractConfig.assets[1], initTimestamp, txOptions)
+    const tx = await client.price(account, contractConfig.assets[1], lastTimestamp, txOptions)
 
     const signatures = signTransaction(tx)
 
@@ -403,7 +391,7 @@ test('x_price', async () => {
     const tx = await client.xPrice(account,
         contractConfig.assets[0],
         contractConfig.assets[1],
-        initTimestamp,
+        lastTimestamp,
         txOptions)
 
     const signatures = signTransaction(tx)

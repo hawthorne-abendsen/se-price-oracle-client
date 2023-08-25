@@ -81,10 +81,10 @@ function getAccountId(source) {
  */
 function buildAssetScVal(asset) {
     switch (asset.type) {
-        case AssetType.STELLAR:
-            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Stellar'), new Address(asset.code).toScVal()])
-        case AssetType.GENERIC:
-            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Generic'), xdr.ScVal.scvSymbol(asset.code)])
+        case AssetType.S:
+            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('S'), new Address(asset.code).toScVal()])
+        case AssetType.G:
+            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('G'), xdr.ScVal.scvSymbol(asset.code)])
         default:
             throw new Error('Invalid asset type')
     }
@@ -105,34 +105,15 @@ function convertToI128ScVal(value) {
     )
 }
 
-function convertToPriceUpdateItem(priceUpdateItem) {
-    return xdr.ScVal.scvMap([
-        new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('asset'), val: buildAssetScVal(priceUpdateItem.asset)}),
-        new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('price'), val: convertToI128ScVal(priceUpdateItem.price)})
-    ])
-}
-
-/**
- *
- * @param {Asset} a - Asset a
- * @param {Asset} b - Asset b
- * @returns {number}
- */
-function sortAssets(a, b) {
-    //Compare by type first
-    if (a.type > b.type) return -1
-    if (a.type < b.type) return 1
-
-    //Compare by code
-    return a.code.localeCompare(b.code)
-}
-
 /**
  * @param {any} result - XDR result meta
  * @returns {number}
  */
 function getSorobanResultValue(result) {
-    return xdr.TransactionMeta.fromXDR(result, 'base64').value().sorobanMeta().returnValue().value()
+    const value = xdr.TransactionMeta.fromXDR(result, 'base64').value().sorobanMeta().returnValue().value()
+    if (value === false) //if footprint's data is different from the contract execution data, the result is false
+        return undefined
+    return value
 }
 
 /**
@@ -142,10 +123,10 @@ function getSorobanResultValue(result) {
 function parseXdrAssetResult(xdrAsset) {
     const assetType = xdrAsset[0].value().toString()
     switch (AssetType[assetType.toUpperCase()]) {
-        case AssetType.GENERIC:
-            return {type: AssetType.GENERIC, code: xdrAsset[1].value().toString()}
-        case AssetType.STELLAR:
-            return {type: AssetType.STELLAR, code: Address.contract(xdrAsset[1].value().value()).toString()}
+        case AssetType.G:
+            return {type: AssetType.G, code: xdrAsset[1].value().toString()}
+        case AssetType.S:
+            return {type: AssetType.S, code: Address.contract(xdrAsset[1].value().value()).toString()}
         default:
             throw new Error(`Unknown asset type: ${assetType}`)
     }
@@ -214,7 +195,7 @@ class OracleClient {
             new xdr.ScMapEntry({key: xdr.ScVal.scvSymbol('admin'), val: new Address(config.admin).toScVal()}),
             new xdr.ScMapEntry({
                 key: xdr.ScVal.scvSymbol('assets'),
-                val: xdr.ScVal.scvVec(config.assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
+                val: xdr.ScVal.scvVec(config.assets.map(asset => buildAssetScVal(asset)))
             }),
             new xdr.ScMapEntry({
                 key: xdr.ScVal.scvSymbol('base_fee'),
@@ -251,7 +232,7 @@ class OracleClient {
             this.contract.call(
                 'add_assets',
                 new Address(getAccountId(source)).toScVal(),
-                xdr.ScVal.scvVec(assets.sort(sortAssets).map(asset => buildAssetScVal(asset)))
+                xdr.ScVal.scvVec(assets.map(asset => buildAssetScVal(asset)))
             ),
             options,
             this.network
@@ -261,13 +242,13 @@ class OracleClient {
     /**
      * Builds a transaction to set prices
      * @param {string|Account} source - Valid Stellar account ID, or Account object
-     * @param {{asset: Asset, price: BigNumber}[]} updates - Array of prices
+     * @param {BigNumber[]} updates - Array of prices
      * @param {number} timestamp - Timestamp in milliseconds
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
     async setPrice(source, updates, timestamp, options = {fee: 100}) {
-        const scValPrices = xdr.ScVal.scvVec(updates.sort((a, b) => sortAssets(a.asset, b.asset)).map(u => convertToPriceUpdateItem(u)))
+        const scValPrices = xdr.ScVal.scvVec(updates.map(u => convertToI128ScVal(u)))
         return await buildTransaction(
             this,
             source,
@@ -559,7 +540,10 @@ class OracleClient {
             response = await this.getTransaction(hash)
             await new Promise(resolve => setTimeout(resolve, 500))
         }
+
         response.hash = hash //Add hash to response to avoid return new object
+        if (response.status === 'FAILED')
+            throw new Error(`Transaction ${hash} failed`)
         return response
     }
 
