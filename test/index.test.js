@@ -12,9 +12,11 @@ if (contractConfig.assets.length < 2)
 
 const initAssetLength = 1
 
+let version = 1
+
 const server = new Server(contractConfig.horizonUrl)
 
-const extraAsset = {type: AssetType.G, code: 'JPY'}
+const extraAsset = {type: AssetType.Generic, code: 'JPY'}
 
 const assetToString = (asset) => !asset ? 'null' : `${asset.type}:${asset.code}`
 
@@ -27,7 +29,7 @@ function normalize_timestamp(timestamp) {
 const MAX_I128 = new BigNumber('170141183460469231731687303715884105727')
 const ADJUSTED_MAX = MAX_I128.dividedBy(new BigNumber(`1e+${contractConfig.decimals}`)) //divide by 10^14
 let lastTimestamp = normalize_timestamp(Date.now())
-const period = contractConfig.resolution * 10
+let period = contractConfig.resolution * 10
 
 let admin
 let account
@@ -163,8 +165,7 @@ test('config', async () => {
         admin: admin.publicKey(),
         assets: contractConfig.assets.slice(0, initAssetLength),
         period,
-        baseFee: new BigNumber(1000),
-        version: 1
+        version
     }, txOptions)
 
     const signatures = signTransaction(tx)
@@ -176,13 +177,45 @@ test('config', async () => {
 }, 300000)
 
 test('add_assets', async () => {
-    const tx = await client.addAssets(account, contractConfig.assets.slice(initAssetLength), txOptions)
+
+    version++
+
+    const tx = await client.addAssets(account, contractConfig.assets.slice(initAssetLength), version, txOptions)
 
     const signatures = signTransaction(tx)
 
     const response = await client.submitTransaction(tx, signatures)
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
+
+}, 300000)
+
+test('set_period', async () => {
+
+    version++
+
+    period += contractConfig.resolution
+
+    let tx = await client.setPeriod(account, period, version, txOptions)
+
+    let signatures = signTransaction(tx)
+
+    let response = await client.submitTransaction(tx, signatures)
+
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
+
+    tx = await client.period(account, txOptions)
+
+    signatures = signTransaction(tx)
+
+    response = await client.submitTransaction(tx, signatures)
+
+    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
+
+    const newPeriod = Client.parseNumberResult(response.resultMetaXdr)
+
+    expect(newPeriod).toBe(period)
+
 }, 300000)
 
 test('set_price', async () => {
@@ -249,7 +282,10 @@ test('set_price (extra price)', async () => {
 }, 300000)
 
 test('add_asset (extra asset)', async () => {
-    const tx = await client.addAssets(account, [extraAsset], txOptions)
+
+    version++
+
+    const tx = await client.addAssets(account, [extraAsset], version, txOptions)
 
     const signatures = signTransaction(tx)
 
@@ -267,9 +303,9 @@ test('config_version', async () => {
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
 
-    const version = Client.parseNumberResult(response.resultMetaXdr)
+    const configVersion = Client.parseNumberResult(response.resultMetaXdr)
 
-    expect(version).toBe(1)
+    expect(configVersion).toBe(version)
 
 }, 300000)
 

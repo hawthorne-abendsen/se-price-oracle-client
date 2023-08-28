@@ -8,11 +8,11 @@ module.exports = {
     horizonUrl: 'https://rpc-futurenet.stellar.org:443',
     adminSecret: 'SAABHX5JQZJJSCGLU2KDMYAIAJOLHUR7PLRBRLGZ5OT45QYH6CQ6HGXS',
     assets: [
-        {type: AssetType.S, code: 'CCS4CSIRFMC24GMM3CK2IN26MBGC7XFU3ANRSZT42Q2EQIYTQPXG6HCP'},
-        {type: AssetType.S, code: 'CCGPVN63F6DFRDJAQGKYAM7MEJMCNZCTCXIYYM4K6P6SLUTUK6GAATY6'},
-        {type: AssetType.G, code: 'EUR'},
-        {type: AssetType.S, code: 'CD47KXBD5FDU6XXIO25WUGOPHCUWNYSVBKUKWT5QFUO7CHXTHFICJZZY'},
-        {type: AssetType.S, code: 'CCRL6YOV5PKFA3MVELSK7T7XNDAZXQXIICTMIQLVUG53WYNGOHM66AOT'},
-        {type: AssetType.G, code: 'USD'}
+        {type: AssetType.Stellar, code: 'CCS4CSIRFMC24GMM3CK2IN26MBGC7XFU3ANRSZT42Q2EQIYTQPXG6HCP'},
+        {type: AssetType.Stellar, code: 'CCGPVN63F6DFRDJAQGKYAM7MEJMCNZCTCXIYYM4K6P6SLUTUK6GAATY6'},
+        {type: AssetType.Generic, code: 'EUR'},
+        {type: AssetType.Stellar, code: 'CD47KXBD5FDU6XXIO25WUGOPHCUWNYSVBKUKWT5QFUO7CHXTHFICJZZY'},
+        {type: AssetType.Stellar, code: 'CCRL6YOV5PKFA3MVELSK7T7XNDAZXQXIICTMIQLVUG53WYNGOHM66AOT'},
+        {type: AssetType.Generic, code: 'USD'}
     ]
 }

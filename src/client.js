@@ -25,7 +25,6 @@ const {i128ToHiLo, hiLoToI128} = require('./utils/i128-helper')
  * @property {Asset[]} assets - Array of assets
  * @property {number} period - Redeem period in milliseconds
  * @property {number} version - Contract version
- * @property {BigNumber} baseFee - Base fee in stroops
  */
 
 /**
@@ -81,10 +80,10 @@ function getAccountId(source) {
  */
 function buildAssetScVal(asset) {
     switch (asset.type) {
-        case AssetType.S:
-            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('S'), new Address(asset.code).toScVal()])
-        case AssetType.G:
-            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('G'), xdr.ScVal.scvSymbol(asset.code)])
+        case AssetType.Stellar:
+            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Stellar'), new Address(asset.code).toScVal()])
+        case AssetType.Generic:
+            return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol('Generic'), xdr.ScVal.scvSymbol(asset.code)])
         default:
             throw new Error('Invalid asset type')
     }
@@ -122,11 +121,11 @@ function getSorobanResultValue(result) {
  */
 function parseXdrAssetResult(xdrAsset) {
     const assetType = xdrAsset[0].value().toString()
-    switch (AssetType[assetType.toUpperCase()]) {
-        case AssetType.G:
-            return {type: AssetType.G, code: xdrAsset[1].value().toString()}
-        case AssetType.S:
-            return {type: AssetType.S, code: Address.contract(xdrAsset[1].value().value()).toString()}
+    switch (AssetType[assetType]) {
+        case AssetType.Generic:
+            return {type: AssetType.Generic, code: xdrAsset[1].value().toString()}
+        case AssetType.Stellar:
+            return {type: AssetType.Stellar, code: Address.contract(xdrAsset[1].value().value()).toString()}
         default:
             throw new Error(`Unknown asset type: ${assetType}`)
     }
@@ -198,10 +197,6 @@ class OracleClient {
                 val: xdr.ScVal.scvVec(config.assets.map(asset => buildAssetScVal(asset)))
             }),
             new xdr.ScMapEntry({
-                key: xdr.ScVal.scvSymbol('base_fee'),
-                val: convertToI128ScVal(config.baseFee)
-            }),
-            new xdr.ScMapEntry({
                 key: xdr.ScVal.scvSymbol('period'),
                 val: xdr.ScVal.scvU64(xdr.Uint64.fromString(config.period.toString()))
             }),
@@ -223,16 +218,40 @@ class OracleClient {
      * Builds a transaction to register assets
      * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset[]} assets - Array of assets
+     * @param {number} version - Contract config version
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async addAssets(source, assets, options = {fee: 100}) {
+    async addAssets(source, assets, version, options = {fee: 100}) {
         return await buildTransaction(this,
             source,
             this.contract.call(
                 'add_assets',
                 new Address(getAccountId(source)).toScVal(),
-                xdr.ScVal.scvVec(assets.map(asset => buildAssetScVal(asset)))
+                xdr.ScVal.scvVec(assets.map(asset => buildAssetScVal(asset))),
+                xdr.ScVal.scvU32(version)
+            ),
+            options,
+            this.network
+        )
+    }
+
+    /**
+     * Builds a transaction to update period
+     * @param {string|Account} source - Valid Stellar account ID, or Account object
+     * @param {number} period - Redeem period in milliseconds
+     * @param {number} version - Contract config version
+     * @param {TxOptions} options - Transaction options
+     * @returns {Promise<Transaction>} Prepared transaction
+     */
+    async setPeriod(source, period, version, options = {fee: 100}) {
+        return await buildTransaction(this,
+            source,
+            this.contract.call(
+                'set_period',
+                new Address(getAccountId(source)).toScVal(),
+                xdr.ScVal.scvU64(xdr.Uint64.fromString(period.toString())),
+                xdr.ScVal.scvU32(version)
             ),
             options,
             this.network
