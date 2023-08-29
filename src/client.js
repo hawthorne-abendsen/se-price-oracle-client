@@ -1,5 +1,4 @@
 const {Server, Contract, TransactionBuilder, Address, xdr, Transaction, Memo, Keypair} = require('soroban-client')
-const {default: BigNumber} = require('bignumber.js')
 const AssetType = require('./asset-type')
 const {i128ToHiLo, hiLoToI128} = require('./utils/i128-helper')
 
@@ -15,8 +14,8 @@ const {i128ToHiLo, hiLoToI128} = require('./utils/i128-helper')
 
 /**
  * @typedef {Object} Price
- * @property {BigNumber} price - Price
- * @property {BigNumber} timestamp - Timestamp
+ * @property {BigInt} price - Price
+ * @property {BigInt} timestamp - Timestamp
  */
 
 /**
@@ -91,7 +90,7 @@ function buildAssetScVal(asset) {
 
 /**
  *
- * @param {BigNumber} value - i128 value
+ * @param {BigInt} value - i128 value
  * @returns {xdr.ScVal}
  */
 function convertToI128ScVal(value) {
@@ -133,12 +132,12 @@ function parseXdrAssetResult(xdrAsset) {
 
 /**
  * @param {any} xdrPrice - XDR price object
- * @returns {{price: BigNumber, timestamp: BigNumber}}
+ * @returns {{price: BigInt, timestamp: BigInt}}
  */
 function parseXdrPriceResult(xdrPrice) {
     return {
         price: hiLoToI128(xdrPrice[0].val().value().hi(), xdrPrice[0].val().value().lo()),
-        timestamp: new BigNumber(xdrPrice[1].val().value())
+        timestamp: BigInt(xdrPrice[1].val().value())
     }
 }
 
@@ -261,7 +260,7 @@ class OracleClient {
     /**
      * Builds a transaction to set prices
      * @param {string|Account} source - Valid Stellar account ID, or Account object
-     * @param {BigNumber[]} updates - Array of prices
+     * @param {BigInt[]} updates - Array of prices
      * @param {number} timestamp - Timestamp in milliseconds
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
@@ -649,7 +648,7 @@ class OracleClient {
 
     /**
      * @param {string} result - Trasanction meta XDR
-     * @returns {BigNumber} - twap value
+     * @returns {BigInt} - twap value
      */
     static parseTwapResult(result) {
         const val = getSorobanResultValue(result)

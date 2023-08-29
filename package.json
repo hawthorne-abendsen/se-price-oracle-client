@@ -1,6 +1,6 @@
 {
   "name": "se-price-oracle-client",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "",
   "main": "src/index.js",
   "scripts": {
@@ -13,8 +13,7 @@
     "tslib": "^2.5.0"
   },
   "devDependencies": {
-    "bignumber.js": "^9.0.1",
-    "jest": "^29.5.0",
-    "@stellar-expert/eslint-config-js": "github:stellar-expert/eslint-config-js"
+    "@stellar-expert/eslint-config-js": "github:stellar-expert/eslint-config-js",
+    "jest": "^29.5.0"
   }
 }

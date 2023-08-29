@@ -2,7 +2,6 @@
 const crypto = require('crypto')
 const {exec} = require('child_process')
 const {Keypair, Server, TransactionBuilder, Operation} = require('soroban-client')
-const {default: BigNumber} = require('bignumber.js')
 const Client = require('../src')
 const AssetType = require('../src/asset-type')
 const contractConfig = require('./contract.config')
@@ -26,8 +25,8 @@ const priceToString = (price) => !price ? 'null' : `{price: ${price.price.toStri
 function normalize_timestamp(timestamp) {
     return Math.floor(timestamp / contractConfig.resolution) * contractConfig.resolution
 }
-const MAX_I128 = new BigNumber('170141183460469231731687303715884105727')
-const ADJUSTED_MAX = MAX_I128.dividedBy(new BigNumber(`1e+${contractConfig.decimals}`)) //divide by 10^14
+const MAX_I128 = BigInt('170141183460469231731687303715884105727')
+const ADJUSTED_MAX = MAX_I128 / (10n ** BigInt(contractConfig.decimals)) //divide by 10^14
 let lastTimestamp = normalize_timestamp(Date.now())
 let period = contractConfig.resolution * 10
 
@@ -131,10 +130,11 @@ function generateRandomI128() {
     //Generate a random 128-bit number
     const buffer = crypto.randomBytes(16) //Generate 16 random bytes = 128 bits
     const hex = buffer.toString('hex') //Convert to hexadecimal
-    let randomNum = new BigNumber(hex, 16) //Convert hex to BigNumber
+    let randomNum = BigInt('0x' + hex) //Convert hex to BigInt
 
-    const MAX_RANGE = new BigNumber(2).pow(128)
-    randomNum = randomNum.dividedBy(MAX_RANGE).times(ADJUSTED_MAX).integerValue(BigNumber.ROUND_DOWN)
+    const MAX_RANGE = 2n ** 128n
+
+    randomNum = (randomNum * ADJUSTED_MAX) / MAX_RANGE
 
     return randomNum
 }
@@ -518,7 +518,7 @@ test('twap', async () => {
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Twap: ${twap.toString()}`)
 
-    expect(twap.isGreaterThan(0)).toBe(true)
+    expect(twap > 0n).toBe(true)
 
 }, 300000)
 
@@ -534,7 +534,7 @@ test('x_twap', async () => {
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}, Twap: ${twap.toString()}`)
 
-    expect(twap.isGreaterThan(0)).toBe(true)
+    expect(twap > 0n).toBe(true)
 
 }, 300000)
 

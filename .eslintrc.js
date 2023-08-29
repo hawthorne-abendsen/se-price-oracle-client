@@ -4,5 +4,7 @@ module.exports = {
     //provide paths to ignore
     ignorePatterns: ['distr/', 'node_modules/'],
     //define project-specific globals if any
-    globals: {}
+    globals: {
+        BigInt: true
+    }
 }

@@ -1,15 +1,13 @@
-const {default: BigNumber} = require('bignumber.js')
-
-const TWO_POW_64 = new BigNumber(2).pow(64)
+const TWO_POW_64 = 2n ** 64n
 
 /**
  * Converts i128 value to hi and lo parts
- * @param {BigNumber} value - i128 value
+ * @param {BigInt} value - i128 value
  * @returns {{hi: string, lo: string}} - hi and lo parts
  */
 function i128ToHiLo(value) {
-    const lo = value.modulo(TWO_POW_64).toFixed()
-    const hi = value.idiv(TWO_POW_64).toFixed()
+    const lo = (value % TWO_POW_64).toString()
+    const hi = (value / TWO_POW_64).toString()
     return {hi, lo}
 }
 
@@ -17,12 +15,12 @@ function i128ToHiLo(value) {
  * Converts hi and lo parts to i128 value
  * @param {string} hi - hi part
  * @param {string} lo - lo part
- * @returns {BigNumber} - i128 value
+ * @returns {BigInt} - i128 value
  */
 function hiLoToI128(hi, lo) {
-    const hiPart = new BigNumber(hi).times(TWO_POW_64)
-    const loPart = new BigNumber(lo)
-    return hiPart.plus(loPart)
+    const hiPart = BigInt(hi) * TWO_POW_64
+    const loPart = BigInt(lo)
+    return hiPart + loPart
 }
 
 module.exports = {
