@@ -11,8 +11,6 @@ if (contractConfig.assets.length < 2)
 
 const initAssetLength = 1
 
-let version = 1
-
 const server = new Server(contractConfig.horizonUrl)
 
 const extraAsset = {type: AssetType.Generic, code: 'JPY'}
@@ -164,8 +162,7 @@ test('config', async () => {
     const tx = await client.config(account, {
         admin: admin.publicKey(),
         assets: contractConfig.assets.slice(0, initAssetLength),
-        period,
-        version
+        period
     }, txOptions)
 
     const signatures = signTransaction(tx)
@@ -177,10 +174,7 @@ test('config', async () => {
 }, 300000)
 
 test('add_assets', async () => {
-
-    version++
-
-    const tx = await client.addAssets(account, contractConfig.assets.slice(initAssetLength), version, txOptions)
+    const tx = await client.addAssets(account, contractConfig.assets.slice(initAssetLength), txOptions)
 
     const signatures = signTransaction(tx)
 
@@ -192,11 +186,9 @@ test('add_assets', async () => {
 
 test('set_period', async () => {
 
-    version++
-
     period += contractConfig.resolution
 
-    let tx = await client.setPeriod(account, period, version, txOptions)
+    let tx = await client.setPeriod(account, period, txOptions)
 
     let signatures = signTransaction(tx)
 
@@ -282,31 +274,13 @@ test('set_price (extra price)', async () => {
 }, 300000)
 
 test('add_asset (extra asset)', async () => {
-
-    version++
-
-    const tx = await client.addAssets(account, [extraAsset], version, txOptions)
+    const tx = await client.addAssets(account, [extraAsset], txOptions)
 
     const signatures = signTransaction(tx)
 
     const response = await client.submitTransaction(tx, signatures)
 
     console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
-}, 300000)
-
-test('config_version', async () => {
-    const tx = await client.configVersion(account, txOptions)
-
-    const signatures = signTransaction(tx)
-
-    const response = await client.submitTransaction(tx, signatures)
-
-    console.log(`Transaction ID: ${response.hash}, Status: ${response.status}`)
-
-    const configVersion = Client.parseNumberResult(response.resultMetaXdr)
-
-    expect(configVersion).toBe(version)
-
 }, 300000)
 
 //TODO: add test for get_price for extra asset before adding it (must be null) and after adding it (must be valid price)

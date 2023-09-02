@@ -1,3 +1,4 @@
+/*eslint-disable no-undef */
 const {i128ToHiLo, hiLoToI128} = require('../../src/utils/i128-helper')
 
 const testValues = [

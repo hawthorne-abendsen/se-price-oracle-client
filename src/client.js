@@ -23,7 +23,6 @@ const {i128ToHiLo, hiLoToI128} = require('./utils/i128-helper')
  * @property {string} admin - Valid Stellar account ID
  * @property {Asset[]} assets - Array of assets
  * @property {number} period - Redeem period in milliseconds
- * @property {number} version - Contract version
  */
 
 /**
@@ -198,10 +197,6 @@ class OracleClient {
             new xdr.ScMapEntry({
                 key: xdr.ScVal.scvSymbol('period'),
                 val: xdr.ScVal.scvU64(xdr.Uint64.fromString(config.period.toString()))
-            }),
-            new xdr.ScMapEntry({
-                key: xdr.ScVal.scvSymbol('version'),
-                val: xdr.ScVal.scvU32(config.version)
             })
         ])
         return await buildTransaction(
@@ -217,18 +212,16 @@ class OracleClient {
      * Builds a transaction to register assets
      * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {Asset[]} assets - Array of assets
-     * @param {number} version - Contract config version
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async addAssets(source, assets, version, options = {fee: 100}) {
+    async addAssets(source, assets, options = {fee: 100}) {
         return await buildTransaction(this,
             source,
             this.contract.call(
                 'add_assets',
                 new Address(getAccountId(source)).toScVal(),
-                xdr.ScVal.scvVec(assets.map(asset => buildAssetScVal(asset))),
-                xdr.ScVal.scvU32(version)
+                xdr.ScVal.scvVec(assets.map(asset => buildAssetScVal(asset)))
             ),
             options,
             this.network
@@ -239,18 +232,16 @@ class OracleClient {
      * Builds a transaction to update period
      * @param {string|Account} source - Valid Stellar account ID, or Account object
      * @param {number} period - Redeem period in milliseconds
-     * @param {number} version - Contract config version
      * @param {TxOptions} options - Transaction options
      * @returns {Promise<Transaction>} Prepared transaction
      */
-    async setPeriod(source, period, version, options = {fee: 100}) {
+    async setPeriod(source, period, options = {fee: 100}) {
         return await buildTransaction(this,
             source,
             this.contract.call(
                 'set_period',
                 new Address(getAccountId(source)).toScVal(),
-                xdr.ScVal.scvU64(xdr.Uint64.fromString(period.toString())),
-                xdr.ScVal.scvU32(version)
+                xdr.ScVal.scvU64(xdr.Uint64.fromString(period.toString()))
             ),
             options,
             this.network
@@ -349,16 +340,6 @@ class OracleClient {
      */
     async lastTimestamp(source, options = {fee: 100}) {
         return await buildTransaction(this, source, this.contract.call('last_timestamp'), options, this.network)
-    }
-
-    /**
-     * Builds a transaction to get last config version
-     * @param {string|Account} source - Valid Stellar account ID, or Account object
-     * @param {TxOptions} options - Transaction options
-     * @returns {Promise<Transaction>} Prepared transaction
-     */
-    async configVersion(source, options = {fee: 100}) {
-        return await buildTransaction(this, source, this.contract.call('config_version'), options, this.network)
     }
 
     /**
